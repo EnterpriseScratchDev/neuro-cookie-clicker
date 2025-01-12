@@ -1,0 +1,11 @@
+{
+	"Name": "Neuro-sama API Integration",
+	"ID": "neuro-api-mod",
+	"Author": "EnterpriseScratchDeveloper",
+	"Description": "Integration with the Neuro-sama Game API",
+	"ModVersion": 1,
+	"GameVersion": 2.052,
+	"Date": "11/01/2024",
+	"Dependencies": ["CCSE"],
+	"Disabled": 1
+}
