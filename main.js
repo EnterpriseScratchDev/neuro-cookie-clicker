@@ -11,7 +11,8 @@ var CCSE;
  * @prop {?number} mouseX
  * @prop {?number} mouseY
  * @prop {0 | 1} canClick
- * @prop {number} cookies the number of cookies the player has (flouting-point number)
+ * @prop {number} cookies the number of cookies the player has (floating-point number)
+ * @prop {(name: string) => void} bakeryNameSet
  *
  * --- Notifications ---
  * @prop {(name: string, desc: string, pic: ?, quick?: number, noLog?: number) => void} Notify
@@ -110,21 +111,88 @@ var CCSE;
  */
 
 if (NeuroIntegration === undefined) var NeuroIntegration = {};
-NeuroIntegration.name = "Neuro-sama Integration";
+NeuroIntegration.id = "neuro api mod"; // the spaces are necessary
+NeuroIntegration.name = "Neuro-sama API Integration";
 NeuroIntegration.version = "1.00";
 NeuroIntegration.GameVersion = "2.052";
+/** @type {string | undefined} */
+NeuroIntegration.errorMessage = undefined;
+
+if (NeuroIntegration.util === undefined) NeuroIntegration.util = {};
+
+/**
+ * Convert an object to a JSON string, handling circular references.
+ * @param obj the object to stringify
+ * @returns {string} the JSON string
+ */
+NeuroIntegration.util.safeJsonStringify = function safeJsonStringify(obj) {
+    return JSON.stringify(obj, (key, value) => {
+        const seen = new WeakSet();
+        if (typeof value === "object" && value !== null) {
+            if (seen.has(value)) {
+                // Circular reference found, discard key
+                return "[Circular Reference]";
+            }
+            // Store value in our collection
+            seen.add(value);
+        }
+        return value;
+    });
+};
+
+/**
+ * Reload the game in the same way as when the mod list is modified.
+ */
+NeuroIntegration.util.reload = () => {
+    console.info("[NeuroIntegration] Reloading the game...");
+    Game.toSave = true;
+    Game.toReload = true;
+};
+
+NeuroIntegration.loadDependencies = async function () {
+    console.info("[NeuroIntegration] Loading dependencies...");
+    const modDir = CCSE.GetModPath(NeuroIntegration.id);
+    const promises = [];
+    if (!window.z) {
+        promises.push(new Promise((resolve, reject) => {
+            try {
+                const zodScript = document.createElement("script");
+                zodScript.src = modDir + "/lib/zod.umd.js";
+                zodScript.onload = resolve;
+                zodScript.onerror = (event) => {
+                    const errorMessage = `Failed to load Zod script from ${event.target.src}`;
+                    NeuroIntegration.errorMessage = errorMessage;
+                    console.error("[NeuroIntegration] " + errorMessage, event);
+                    reject(new Error(errorMessage));
+                };
+                document.head.appendChild(zodScript);
+            } catch (e) {
+                NeuroIntegration.errorMessage = e.message || e;
+                console.error("[NeuroIntegration] Failed to load Zod", e);
+                reject(new Error(e));
+            }
+        }).then(() => {
+            console.info("[NeuroIntegration] Loaded Zod");
+        }));
+    }
+    return Promise.all(promises);
+};
 
 NeuroIntegration.launch = function () {
 
+    Game.Notify("Neuro-sama Integration loaded!", "Bwaaa!", [16, 5], 6, 1);
+
     const Mod = NeuroIntegration;
+
+    /** @type {typeof import("./lib/zod.umd.js").z} */
+    var z = window.z;
 
     /** @type {boolean} */
     Mod.isLoaded = true;
 
     automaticallyCloseNotes();
 
-    Game.Notify("Neuro-sama Integration mod loaded!", "Bwaaa!", [16, 5], 6, 1);
-    console.info("[NeuroIntegration] Loaded!");
+    // Game.Notify("Neuro-sama Integration mod loaded!", "Bwaaa!", [16, 5], 6, 1);
 
     /**
      * @prop {number} msPerClick the number of milliseconds between each click
@@ -144,15 +212,14 @@ NeuroIntegration.launch = function () {
      * @return {void}
      */
     Mod.click = function (times = 1) {
-        console.info(`[NeuroIntegration] Clicking ${times} times`);
+        console.info(`[NeuroIntegration] Trying to click ${times} times`);
         Mod.autoClicker.remainingClicks = Math.min(Mod.autoClicker.remainingClicks + times, Mod.autoClicker.maximumPendingClicks);
         if (Mod.autoClicker.intervalId === null) {
             console.info(`[NeuroIntegration] Setting up clicker interval`);
             Mod.autoClicker.intervalId = setInterval(() => {
                 // console.debug(`[NeuroIntegration] Remaining clicks: ${Mod.autoClicker.remainingClicks}`);
                 if (Mod.autoClicker.remainingClicks > 0 || Game.canClick) {
-
-
+                    Mod.util.clickCookie();
                     Mod.autoClicker.remainingClicks--;
                 } else {
                     clearInterval(Mod.autoClicker.intervalId);
@@ -167,15 +234,7 @@ NeuroIntegration.launch = function () {
         console.debug(`[NeuroIntegration] Clicked! (from hook)`);
     });
 
-    Mod.util = {};
-    /**
-     * Reload the game in the same way as when the mod list is modified.
-     */
-    Mod.util.reload = () => {
-        console.info("[NeuroIntegration] Reloading the game...");
-        Game.toSave = true;
-        Game.toReload = true;
-    };
+    if (!Mod.util) Mod.util = {};
     /**
      * Get a random integer in the range `[min, max]`.
      * @param {number} min the minimum value
@@ -201,7 +260,7 @@ NeuroIntegration.launch = function () {
      */
     Mod.util.spawnGoldenCookie = () => {
         return new Game.shimmer("golden", 0, 0);
-    }
+    };
 
     /**
      * Automatically close notifications after a certain amount of time.
@@ -229,7 +288,7 @@ NeuroIntegration.launch = function () {
         // Click the cookie
         Game.lastClick = 0; // prevents the game from ignoring the click if it's too soon after the last one
         Game.ClickCookie();
-    }
+    };
 
     function getShopContents(maxUpgrades = 5) {
         let upgrades = [];
@@ -246,6 +305,7 @@ NeuroIntegration.launch = function () {
             upgrades: upgrades
         };
     }
+
     Mod.util.getShopContents = getShopContents;
 
     function simplifyHtmlString(htmlString) {
@@ -259,6 +319,7 @@ NeuroIntegration.launch = function () {
             // Replace italic tags with single asterisks
             .replaceAll(/<\/?i>/g, "*");
     }
+
     Mod.util.simplifyHtmlString = simplifyHtmlString;
 
     /**
@@ -293,16 +354,51 @@ NeuroIntegration.launch = function () {
             return "Failed to buy for an unknown reason";
         }
     }
+
     Mod.util.buyObject = buyObject;
+
+    console.info("[NeuroIntegration] Finished launching Neuro-sama Integration");
 };
 
 if (!NeuroIntegration.isLoaded) {
+    const launch = () => {
+        NeuroIntegration.loadDependencies()
+            .then(NeuroIntegration.launch, (e) => {
+                console.error("[NeuroIntegration] Failed to load dependencies", e);
+                Game.Notify("Neuro-sama Integration failed to load", `Please copy the error from above and send it to the developer. Be sure to remove any sensitive information.`, [16, 5]);
+                const errorDiv = document.createElement("div");
+                errorDiv.style.cssText = "width: 100%; height: fit-content; padding: 1em;"
+                const errorHeaderElement = document.createElement("h1");
+                errorHeaderElement.innerText = "Neuro-sama Integration failed to load";
+                errorHeaderElement.style.fontSize = "2em";
+                errorDiv.appendChild(errorHeaderElement);
+                const errorTextElement = document.createElement("text");
+                if (e instanceof Error) {
+                    errorTextElement.innerText = `${e.message}`;
+                } else {
+                    errorTextElement.innerHTML = `<text>${e}</text>`;
+                }
+                errorTextElement.style.cssText = "fontSize: 2em; user-select: text; width: 100%; height: fit-content; padding-top: 1em; font-family: monospace;";
+                errorDiv.appendChild(errorTextElement);
+                const copyButton = document.createElement("button");
+                copyButton.innerText = "Copy Error to Clipboard";
+                copyButton.style.cssText = "margin-top: 1em; padding: 0.5em; font-size: 1em;";
+                copyButton.onclick = () => {
+                    navigator.clipboard.writeText(e instanceof Error ? e.message : e).then(
+                        () => console.error("[NeuroIntegration] Copied error message to clipboard"),
+                        r => console.error("[NeuroIntegration] Failed to copy error message to clipboard", r));
+                    alert("Error message copied to clipboard");
+                };
+                errorDiv.appendChild(copyButton);
+                l("centerArea").appendChild(errorDiv);
+            });
+    };
     if (CCSE && CCSE.isLoaded) {
-        NeuroIntegration.launch();
+        launch();
     } else {
         if (!CCSE) CCSE = {};
         if (!CCSE.postLoadHooks) CCSE.postLoadHooks = [];
-        CCSE.postLoadHooks.push(NeuroIntegration.launch);
+        CCSE.postLoadHooks.push(launch);
     }
 }
 
