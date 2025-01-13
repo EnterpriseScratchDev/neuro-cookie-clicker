@@ -12,6 +12,7 @@ var CCSE;
  * @prop {?number} mouseY
  * @prop {0 | 1} canClick
  * @prop {number} cookies the number of cookies the player has (floating-point number)
+ * @prop {Object.<string, number>} cookiesPsByType the number of cookies per second produced by each building type
  * @prop {(name: string) => void} bakeryNameSet
  *
  * --- Notifications ---
@@ -24,7 +25,7 @@ var CCSE;
  * @prop {Game_Shimmer[]} shimmers the list of shimmers currently on the screen
  * @prop {HTMLDivElement} shimmersL the parent element of all shimmers
  * @prop {number} shimmersN the number of shimmers currently on the screen
- * @prop {((Game_Shimmer) => void)[]} customShimmers the callbacks to be called when a shimmer is created
+ * @prop {((Game_Shimmer) => void)[]} customShimmer the callbacks to be called when a shimmer is created (note: there is not meant to be an 's' at the end)
  *
  * --- Upgrades ---
  * @prop {Object.<string, Upgrade>} Upgrades upgrades by name
@@ -61,7 +62,7 @@ var CCSE;
  * @prop {() => "Upgrade"} getType
  * @prop {() => number} getPrice
  * @prop {() => boolean} canBuy
- * @prop {(bypass: boolean) => (0 | 1)} buy
+ * @prop {(bypass: boolean = false) => (0 | 1)} buy
  */
 
 /**
@@ -149,48 +150,396 @@ NeuroIntegration.util.reload = () => {
     Game.toReload = true;
 };
 
+NeuroIntegration.loadDependency = function (path) {
+    console.debug(`Loading dependency from path "${path}"`);
+    return new Promise((resolve, reject) => {
+        try {
+            const scriptElement = document.createElement("script");
+            scriptElement.src = path;
+            scriptElement.onload = resolve;
+            scriptElement.onerror = (event) => {
+                const errorMessage = `Failed to load Zod script from ${event.target.src}`;
+                NeuroIntegration.errorMessage = errorMessage;
+                console.error("[NeuroIntegration] " + errorMessage, event);
+                reject(new Error(errorMessage));
+            };
+            document.head.appendChild(scriptElement);
+        } catch (e) {
+            NeuroIntegration.errorMessage = e.message || e;
+            console.error("[NeuroIntegration] Failed to load Zod", e);
+            reject(new Error(e));
+        }
+    });
+};
+
 NeuroIntegration.loadDependencies = async function () {
     console.info("[NeuroIntegration] Loading dependencies...");
     const modDir = CCSE.GetModPath(NeuroIntegration.id);
-    const promises = [];
+    let zodPromise = Promise.resolve();
     if (!window.z) {
-        promises.push(new Promise((resolve, reject) => {
-            try {
-                const zodScript = document.createElement("script");
-                zodScript.src = modDir + "/lib/zod.umd.js";
-                zodScript.onload = resolve;
-                zodScript.onerror = (event) => {
-                    const errorMessage = `Failed to load Zod script from ${event.target.src}`;
-                    NeuroIntegration.errorMessage = errorMessage;
-                    console.error("[NeuroIntegration] " + errorMessage, event);
-                    reject(new Error(errorMessage));
-                };
-                document.head.appendChild(zodScript);
-            } catch (e) {
-                NeuroIntegration.errorMessage = e.message || e;
-                console.error("[NeuroIntegration] Failed to load Zod", e);
-                reject(new Error(e));
-            }
-        }).then(() => {
-            console.info("[NeuroIntegration] Loaded Zod");
-        }));
+        zodPromise = NeuroIntegration.loadDependency(modDir + "/lib/zod.umd.js");
     }
-    return Promise.all(promises);
+    const neuroApiTypesPromise = zodPromise.then(() => NeuroIntegration.loadDependency(modDir + "/lib/neuroApiTypes.js"));
+    const neuroApiClientPromise = neuroApiTypesPromise.then(() => NeuroIntegration.loadDependency(modDir + "/lib/neuroApiClient.js"));
+    return Promise.all([zodPromise, neuroApiTypesPromise, neuroApiClientPromise]);
+};
+
+NeuroIntegration.createOptionsMenu = function () {
+    function getMenuString() {
+        let m = CCSE.MenuHelper;
+        let str = m.Header("config options go below this") + "<div><span>tktopidjrhpdorjhdporjhpodrhpo</span></div>";
+        return str;
+    }
+
+    Game.customOptionsMenu.push(() => CCSE.AppendCollapsibleOptionsMenu(NeuroIntegration.name, getMenuString()));
+};
+
+if (NeuroIntegration.api === undefined) NeuroIntegration.api = {};
+NeuroIntegration.api.setUpWebSocket = function () {
+    const Mod = NeuroIntegration;
+    const address = Mod.config?.wsAddress ?? "ws://localhost:8000";
+    if (Mod.api.client) {
+        Mod.api.client.close();
+        Mod.api.client = undefined;
+    }
+    Mod.api.client = new Mod.api.NeuroApiClient(address, {
+        shouldReconnect: true,
+        reconnectTimeMs: 5000
+    });
+    /** @type {typeof import("neuroApiTypes")} */
+    const client = Mod.api.client;
+    client.onStatus((status) => {
+        console.info(`WebSocket status: ${status}`);
+        if (status === "open") {
+            client.send({
+                command: "startup",
+                game: "Cookie Clicker"
+            });
+            Mod.api.registerActions("buy_upgrade", "buy_building");
+
+            // Automatically click the cookie every 100ms
+            if (Mod.autoClicker.intervalId === null) {
+                Mod.autoClicker.intervalId = setInterval(() => Mod.util.clickCookie(), Mod.autoClicker.msPerClick);
+            }
+        } else {
+            if (Mod.autoClicker.intervalId !== null) {
+                clearInterval(Mod.autoClicker.intervalId);
+                Mod.autoClicker.intervalId = null;
+            }
+        }
+    });
+    client.onCommand("action", (message) => {
+        console.debug("[NeuroIntegration] Received action message:", message);
+        const handler = Mod.api.actionHandlers[message.data.name];
+        if (handler) {
+            handler(message);
+        } else {
+            console.error(`[NeuroIntegration] No handler for action "${message.data.name}"`);
+        }
+    });
+};
+
+/**
+ *
+ * @param {ActionResultMessage} result
+ */
+NeuroIntegration.api.sendActionResult = function (result) {
+    console.debug("[NeuroIntegration] Sending action result:", result);
+    NeuroIntegration.api.client?.send(result);
+};
+
+/**
+ * @type {Object.<string, function(ActionMessage): void>}
+ */
+NeuroIntegration.api.actionHandlers = {}
+
+NeuroIntegration.api.actionHandlers.click_cookie = (actionMessage) => {
+    NeuroIntegration.click(25);
+    if (NeuroIntegration.autoClicker.remainingClicks > 90) {
+        NeuroIntegration.api.unregisterActions("click_cookie");
+    }
+    NeuroIntegration.api.sendActionResult({
+        command: "action/result",
+        game: "Cookie Clicker",
+        data: {
+            id: actionMessage.data.id,
+            success: true,
+            message: "You start rapidly clicking the cookie!"
+        }
+    });
+};
+
+NeuroIntegration.api.actionHandlers.click_golden_cookie = (actionMessage) => {
+    if (Game.shimmersN === 0) {
+        NeuroIntegration.api.unregisterActions("click_golden_cookie");
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: "There are no golden cookies to click :("
+            }
+        });
+    } else {
+        try {
+            Game.shimmers[0].l.click(); // click the first golden cookie
+        } catch (e) {
+            // This is unlikely to happen, so we won't handle it any further
+            console.error("[NeuroIntegration] Failed to click a golden cookie", e);
+        }
+        let message;
+        if (Game.shimmersN > 0) {
+            message = `You click the golden cookie! There are ${Game.shimmersN} more golden cookies to click!`;
+        } else {
+            message = `You click the golden cookie! There no more golden cookies to click!`;
+            NeuroIntegration.api.unregisterActions("click_golden_cookie");
+        }
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: true,
+                message: message
+            }
+        });
+    }
+};
+
+NeuroIntegration.api.actionHandlers.buy_upgrade = (actionMessage) => {
+    console.info(`[NeuroIntegration] Executing buy_upgrade action:`, actionMessage);
+    let upgradeName;
+    try {
+        const dataObj = JSON.parse(actionMessage.data.data);
+        upgradeName = dataObj.upgrade_name;
+    } catch (e) {
+        console.error(`[NeuroIntegration] Failed to parse data for action "buy_upgrade"`, e);
+    }
+    if (!upgradeName) {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: "No upgrade name provided"
+            }
+        });
+        return;
+    }
+    const buyError = NeuroIntegration.util.buyUpgrade(upgradeName);
+    if (buyError) {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: buyError
+            }
+        });
+    } else {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: true,
+                message: `You bought the upgrade!`
+            }
+        });
+    }
+}
+
+NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
+    console.info(`[NeuroIntegration] Executing buy_building action:`, actionMessage);
+    let buildingName;
+    let amount = 1;
+    try {
+        const dataObj = JSON.parse(actionMessage.data.data);
+        buildingName = dataObj.building_name;
+        if (dataObj.amount && typeof dataObj.amount === "number") {
+            amount = dataObj.amount;
+        }
+    } catch (e) {
+        console.error(`[NeuroIntegration] Failed to parse data for action "buy_building"`, e);
+    }
+    if (!buildingName) {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: "No building name provided"
+            }
+        });
+        return;
+    }
+    const object = NeuroIntegration.util.getObjectByName(buildingName);
+    if (typeof object === "undefined") {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: `No building found with name "${buildingName}"`
+            }
+        });
+        return;
+    }
+    const buyResult = NeuroIntegration.util.buyObject(object, amount);
+    if (typeof buyResult === "string") {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: false,
+                message: "Failed to buy the building: " + buyResult
+            }
+        });
+    } else {
+        NeuroIntegration.api.sendActionResult({
+            command: "action/result",
+            game: "Cookie Clicker",
+            data: {
+                id: actionMessage.data.id,
+                success: true,
+                message: `You bought ${buyResult} of [${object.name}]`
+            }
+        });
+    }
+}
+
+/**
+ * @type {Object.<string, Action>}
+ */
+NeuroIntegration.api.actions = {
+    // click_cookie: {
+    //     name: "click_cookie",
+    //     description: "Rapidly click the cookie for a few seconds",
+    //     schema: undefined
+    // },
+    click_golden_cookie: {
+        name: "click_golden_cookie",
+        description: "Click the golden cookie",
+        schema: undefined
+    },
+    buy_upgrade: {
+        name: "buy_upgrade",
+        description: "Buy an upgrade. The upgrade name must exactly match the name of an upgrade in the store.",
+        schema: {
+            type: "object",
+            properties: {
+                upgrade_name: {
+                    type: "string"
+                }
+            },
+            required: ["upgrade_name"]
+        }
+    },
+    buy_building: {
+        name: "buy_building",
+        description: "Buy a building. The building name must exactly match the name of a building in the store. If you have insufficient cookies to buy the requested amount, the game will buy as many as you can afford.",
+        schema: {
+            type: "object",
+            properties: {
+                building_name: {
+                    type: "string"
+                },
+                amount: {
+                    type: "number"
+                }
+            },
+            required: ["building_name"]
+        }
+    }
+};
+
+/**
+ * Register actions with the Neuro-sama API.
+ * @param {string[]} actionNames the names of the actions to register
+ * @see NeuroIntegration.api.actions
+ */
+NeuroIntegration.api.registerActions = (...actionNames) => {
+    /** @type {Action[]} */
+    const actions = [];
+    for (const actionName of actionNames) {
+        const action = NeuroIntegration.api.actions[actionName];
+        if (!action) {
+            console.error(`[NeuroIntegration] Action "${actionName}" is not defined`);
+            continue;
+        }
+        actions.push(action);
+    }
+    /** @type {RegisterActionsMessage} */
+    const message = {
+        command: "actions/register",
+        game: "Cookie Clicker",
+        data: {
+            actions: actions
+        }
+    };
+    NeuroIntegration.api.client?.send(message);
+};
+
+/**
+ * Unregister actions with the Neuro-sama API.
+ * @param {...string} actionNames the names of the actions to register
+ * @see NeuroIntegration.api.actions
+ */
+NeuroIntegration.api.unregisterActions = (...actionNames) => {
+    /** @type {UnregisterActionsMessage} */
+    const message = {
+        command: "actions/unregister",
+        game: "Cookie Clicker",
+        data: {
+            action_names: actionNames
+        }
+    };
+    NeuroIntegration.api.client?.send(message);
+};
+
+/**
+ * Send context over the Neuro-sama API.
+ * @param {any} message a message explaining the context
+ * @param {boolean = false} silent whether to prompt Neuro to respond to the context
+ */
+NeuroIntegration.api.sendContext = (message, silent = false) => {
+    if (typeof message !== "string") {
+        message = JSON.stringify(message);
+    }
+    /** @type {ContextMessage} */
+    const contextMessage = {
+        command: "context",
+        game: "Cookie Clicker",
+        data: {
+            message: message,
+            silent: silent
+        }
+    };
+    NeuroIntegration.api.client?.send(contextMessage);
 };
 
 NeuroIntegration.launch = function () {
 
+    automaticallyCloseNotes();
     Game.Notify("Neuro-sama Integration loaded!", "Bwaaa!", [16, 5], 6, 1);
 
     const Mod = NeuroIntegration;
 
-    /** @type {typeof import("./lib/zod.umd.js").z} */
-    var z = window.z;
-
     /** @type {boolean} */
     Mod.isLoaded = true;
 
-    automaticallyCloseNotes();
+    /** @type {typeof import("./lib/zod.umd.js").z} */
+    var z = window.libs.zod.z;
+
+    if (Mod.api === undefined) Mod.api = {};
+    Mod.api.NeuroApiClient = window.libs.neuroApiClient.NeuroApiClient;
+    Mod.api.types = window.libs.neuroApiTypes;
 
     // Game.Notify("Neuro-sama Integration mod loaded!", "Bwaaa!", [16, 5], 6, 1);
 
@@ -200,7 +549,7 @@ NeuroIntegration.launch = function () {
      * @prop {number | null} setIntervalId the ID of the last call to `setInterval`, or `null` if no interval is running
      */
     Mod.autoClicker = {
-        msPerClick: 100,
+        msPerClick: 200,
         maximumPendingClicks: 100,
         remainingClicks: 0,
         intervalId: null
@@ -230,9 +579,10 @@ NeuroIntegration.launch = function () {
         }
     };
 
-    Game.registerHook("click", () => {
-        console.debug(`[NeuroIntegration] Clicked! (from hook)`);
-    });
+    // Uncomment to log when the cookie is clicked
+    // Game.registerHook("click", () => {
+    //     console.debug(`[NeuroIntegration] Clicked! (from hook)`);
+    // });
 
     if (!Mod.util) Mod.util = {};
     /**
@@ -290,7 +640,35 @@ NeuroIntegration.launch = function () {
         Game.ClickCookie();
     };
 
-    function getShopContents(maxUpgrades = 5) {
+    Mod.util.getCookiesPerSecondByBuilding = () => {
+        const cookiesPerSecondByBuilding = Game.cookiesPsByType;
+        const filteredCookiesPerSecondByBuilding = {};
+        for (const key in cookiesPerSecondByBuilding) {
+            if (cookiesPerSecondByBuilding.hasOwnProperty(key) && cookiesPerSecondByBuilding[key] !== 0) {
+                cookiesPerSecondByBuilding[key] = cookiesPerSecondByBuilding[key];
+            }
+        }
+        return filteredCookiesPerSecondByBuilding;
+    }
+
+    Mod.util.getContext = () => {
+        return {
+            cookies: Beautify(Game.cookies),
+            totalCookiesPerSecond: Beautify(Game.cookiesPs),
+            cookiesPerSecondByBuilding: Mod.util.getCookiesPerSecondByBuilding(),
+            store: getStoreContents(5)
+        };
+    }
+    // // TODO: make this configurable
+    setInterval(() => {
+        // TODO: make this configurable
+        // if (Mod.autoClicker.remainingClicks < 75) {
+        //     Mod.api.registerActions("click_cookie");
+        // }
+        Mod.api.sendContext(Mod.util.getContext(), true);
+    }, 5000);
+
+    function getStoreContents(maxUpgrades = 5) {
         let upgrades = [];
         for (let i = 0; i < Math.min(Game.UpgradesInStore.length, maxUpgrades); i++) {
             const upgrade = Game.UpgradesInStore[i];
@@ -301,12 +679,28 @@ NeuroIntegration.launch = function () {
                 canBuy: upgrade.canBuy()
             });
         }
+
+        let objects = [];
+        for (let i = 0; i < Game.ObjectsById.length; i++) {
+            const object = Game.ObjectsById[i];
+            if (object.locked) continue;
+            objects.push({
+                name: object.name,
+                desc: simplifyHtmlString(object.desc),
+                priceFor1: Beautify(object.getPrice()),
+                priceFor5: Beautify(object.getSumPrice(5)),
+                priceFor10: Beautify(object.getSumPrice(10)),
+                // priceFor25: Beautify(object.getSumPrice(25)),
+            });
+        }
+
         return {
-            upgrades: upgrades
+            upgrades: upgrades,
+            objects: objects
         };
     }
 
-    Mod.util.getShopContents = getShopContents;
+    Mod.util.getStoreContents = getStoreContents;
 
     function simplifyHtmlString(htmlString) {
         return htmlString
@@ -321,6 +715,16 @@ NeuroIntegration.launch = function () {
     }
 
     Mod.util.simplifyHtmlString = simplifyHtmlString;
+
+    /**
+     * Get an object (e.g., a building) by its name.
+     * @param name the name of the object
+     * @return {Game_Object | undefined} the object with the given name, or `undefined` if no object was found
+     */
+    Mod.util.getObjectByName = (name) => {
+        name = name.toLowerCase().replaceAll(/\W/g, "")
+        return Game.ObjectsById.find(obj => obj.name.toLowerCase().replaceAll(/\W/g, "") === name);
+    }
 
     /**
      * Buy an object
@@ -338,7 +742,7 @@ NeuroIntegration.launch = function () {
             return "This object is locked";
         }
         if (object.getPrice() > Game.cookies) {
-            console.warn(`[NeuroIntegration] Insufficient cookies to buy ${amount} of [${object.name}]`);
+            console.warn(`[NeuroIntegration] Insufficient cookies to buy any [${object.name}]`);
             return `Insufficient cookies to buy any [${object.name}]. You need ${Beautify(object.getPrice() - Game.cookies)} more cookies to afford one.`;
         }
         const oldAmount = object.amount;
@@ -357,6 +761,48 @@ NeuroIntegration.launch = function () {
 
     Mod.util.buyObject = buyObject;
 
+    /**
+     * Attempt to buy an upgrade by name.
+     * @param upgradeName the name of the upgrade to buy
+     * @returns {undefined | string} `undefined` if the upgrade was bought successfully, or an error message if the upgrade could not be bought
+     */
+    function buyUpgrade (upgradeName) {
+        const availableUpgrades = Game.UpgradesInStore;
+        upgradeName = upgradeName.toLowerCase().replaceAll(/\W/g, "")
+        const upgrade = availableUpgrades.find(u => u.name.toLowerCase().replaceAll(/\W/g, "") === upgradeName);
+        if (!upgrade) {
+            console.warn(`[NeuroIntegration] No upgrade found with name "${upgradeName}"`);
+            return `No upgrade found with name "${upgradeName}". Be sure to match the name exactly.`;
+        }
+        const cookies = Game.cookies;
+        const price = upgrade.getPrice();
+        if (cookies < price) {
+            console.warn(`[NeuroIntegration] Insufficient cookies to buy upgrade "${upgradeName}"`);
+            return `Insufficient cookies to buy upgrade "${upgrade.name}". You need ${Beautify(price - cookies)} more cookies to afford it.`;
+        }
+        const success = upgrade.buy();
+        if (success) {
+            console.info(`[NeuroIntegration] Bought upgrade "${upgrade.name}"`);
+            return undefined;
+        } else {
+            console.error(`[NeuroIntegration] Failed to buy upgrade "${upgrade.name}" for an unknown reason`);
+            return "Failed to buy for an unknown reason";
+        }
+    }
+
+    Mod.util.buyUpgrade = buyUpgrade;
+
+    // Notify Neuro when a golden cookie appears
+    Game.customShimmer.push((shimmer) => {
+        console.debug(`[NeuroIntegration] Shimmer spawned:`, shimmer);
+        Mod.api.registerActions("click_golden_cookie");
+        Mod.api.sendContext("A golden cookie has appeared!", false);
+    });
+
+    Mod.createOptionsMenu();
+
+    Mod.api.setUpWebSocket();
+
     console.info("[NeuroIntegration] Finished launching Neuro-sama Integration");
 };
 
@@ -367,7 +813,7 @@ if (!NeuroIntegration.isLoaded) {
                 console.error("[NeuroIntegration] Failed to load dependencies", e);
                 Game.Notify("Neuro-sama Integration failed to load", `Please copy the error from above and send it to the developer. Be sure to remove any sensitive information.`, [16, 5]);
                 const errorDiv = document.createElement("div");
-                errorDiv.style.cssText = "width: 100%; height: fit-content; padding: 1em;"
+                errorDiv.style.cssText = "width: 100%; height: fit-content; padding: 1em;";
                 const errorHeaderElement = document.createElement("h1");
                 errorHeaderElement.innerText = "Neuro-sama Integration failed to load";
                 errorHeaderElement.style.fontSize = "2em";
