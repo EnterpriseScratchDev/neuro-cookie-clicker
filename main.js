@@ -107,6 +107,13 @@ var CCSE;
  */
 
 /**
+ * Cookie Clicker function that formats a number with commas.
+ * @typedef {function} Beautify
+ * @param {number} num
+ * @return {string}
+ */
+
+/**
  * @typedef {object} CCSE_Art
  * TODO
  */
@@ -146,6 +153,12 @@ NeuroIntegration.util.safeJsonStringify = function safeJsonStringify(obj) {
  */
 NeuroIntegration.util.reload = () => {
     console.info("[NeuroIntegration] Reloading the game...");
+
+    if (l("neuro-integration-ws-address")?.value) {
+        NeuroIntegration.config.wsAddress = l("neuro-integration-ws-address").value;
+        CCSE.save();
+    }
+
     Game.toSave = true;
     Game.toReload = true;
 };
@@ -184,10 +197,57 @@ NeuroIntegration.loadDependencies = async function () {
     return Promise.all([zodPromise, neuroApiTypesPromise, neuroApiClientPromise]);
 };
 
+NeuroIntegration.defaultConfig = function () {
+    return {
+        wsAddress: "ws://localhost:8000"
+    };
+}
+
+// NeuroIntegration.config = NeuroIntegration.defaultConfig();
+
+/**
+ * Update a configuration option.
+ * @param {string} key
+ * @param {any} value
+ */
+NeuroIntegration.updateConfig = function (key, value) {
+    switch (key) {
+        case "wsAddress":
+            if (typeof value === "string") {
+                NeuroIntegration.config.wsAddress = value;
+                NeuroIntegration.api.setUpWebSocket();
+            }
+            break;
+    }
+}
+
 NeuroIntegration.createOptionsMenu = function () {
     function getMenuString() {
         let m = CCSE.MenuHelper;
-        let str = m.Header("config options go below this") + "<div><span>tktopidjrhpdorjhdporjhpodrhpo</span></div>";
+        let str = "";
+
+        let reloadButtonStr = ""
+            + "<div class='listing'>"
+            + m.ActionButton("NeuroIntegration.config.wsAddress=NeuroIntegration.temp.wsAddress; CCSE.save(); NeuroIntegration.util.reload();", "Reload the Game")
+            + "<label>Use this to quickly reload the game and apply the below settings</label>"
+            + "</div>";
+        str += reloadButtonStr;
+
+        if (NeuroIntegration.temp === undefined) NeuroIntegration.temp = {};
+        if (NeuroIntegration.temp.wsAddress === undefined) NeuroIntegration.temp.wsAddress = NeuroIntegration.config.wsAddress;
+
+        const currentWsAddress = NeuroIntegration.config.wsAddress;
+        let wsConfigStr = ""
+            + m.Header("WebSocket Configuration")
+            + "<div class='listing'>"
+            + `<text>Current WebSocket Address: ${currentWsAddress}</text>`
+            + "</div>"
+            + "<div class='listing'>"
+            + m.InputBox("neuro-integration-ws-address", 200, NeuroIntegration.temp.wsAddress, "NeuroIntegration.temp.wsAddress=this.value;console.log(this.value); Game.UpdateMenu();")
+            + "<label>Use the Reload button above to apply this change. This text box loses focus sometimes, there's not much I can do about it :(</label>"
+            + "</div>";
+        str += wsConfigStr;
+
         return str;
     }
 
@@ -197,7 +257,12 @@ NeuroIntegration.createOptionsMenu = function () {
 if (NeuroIntegration.api === undefined) NeuroIntegration.api = {};
 NeuroIntegration.api.setUpWebSocket = function () {
     const Mod = NeuroIntegration;
-    const address = Mod.config?.wsAddress ?? "ws://localhost:8000";
+    // Clear the auto-clicker interval if it's running
+    if (Mod.autoClicker.intervalId !== null) {
+        clearInterval(Mod.autoClicker.intervalId);
+        Mod.autoClicker.intervalId = null;
+    }
+    const address = Mod.config?.wsAddress || Mod.defaultConfig().wsAddress;
     if (Mod.api.client) {
         Mod.api.client.close();
         Mod.api.client = undefined;
@@ -531,6 +596,40 @@ NeuroIntegration.launch = function () {
 
     const Mod = NeuroIntegration;
 
+    CCSE.customSave.push(() => {
+        console.info("[NeuroIntegration] Saving config...");
+        Mod.config.createdVersion = Mod.version;
+        CCSE.config.OtherMods.NeuroIntegration = JSON.stringify(Mod.config);
+    });
+
+    CCSE.customLoad.push(() => {
+        console.info("[NeuroIntegration] Loading config...");
+        let loadedConfig;
+        try {
+            loadedConfig = JSON.parse(CCSE.config.OtherMods.NeuroIntegration);
+            console.info("[NeuroIntegration] Loaded config:", loadedConfig);
+        } catch (e) {
+            console.error("[NeuroIntegration] Failed to parse loaded config, resetting to default", e);
+            Mod.config = Mod.defaultConfig();
+            return;
+        }
+        if (!loadedConfig || typeof loadedConfig !== "object") {
+            console.error("[NeuroIntegration] Loaded config is invalid, resetting to default");
+            Mod.config = Mod.defaultConfig();
+            return;
+        }
+        if (loadedConfig.createdVersion !== Mod.version) {
+            console.warn("[NeuroIntegration] Config is from an older version, issues may occur. It's probably fine, though.");
+        }
+        const oldConfig = Mod.config ?? {};
+        const newConfig = { ...NeuroIntegration.defaultConfig(), ...loadedConfig };
+        if (Mod.api.client && newConfig.wsAddress !== Mod.config.wsAddress) {
+            Mod.setUpWebSocket();
+        }
+        Mod.config = newConfig;
+    });
+    CCSE.load();
+
     /** @type {boolean} */
     Mod.isLoaded = true;
 
@@ -652,12 +751,17 @@ NeuroIntegration.launch = function () {
     }
 
     Mod.util.getContext = () => {
-        return {
+        const context = {
             cookies: Beautify(Game.cookies),
             totalCookiesPerSecond: Beautify(Game.cookiesPs),
             cookiesPerSecondByBuilding: Mod.util.getCookiesPerSecondByBuilding(),
             store: getStoreContents(5)
         };
+        const commentsText = l("commentsText1")?.innerText;
+        if (commentsText && commentsText.length > 0) {
+            context.bulletin = commentsText;
+        }
+        return context;
     }
     // // TODO: make this configurable
     setInterval(() => {
@@ -684,6 +788,8 @@ NeuroIntegration.launch = function () {
         for (let i = 0; i < Game.ObjectsById.length; i++) {
             const object = Game.ObjectsById[i];
             if (object.locked) continue;
+            // Skip objects that are too expensive
+            if (object.amount === 0 && object.getPrice() > 10 * Game.cookies) continue;
             objects.push({
                 name: object.name,
                 desc: simplifyHtmlString(object.desc),
