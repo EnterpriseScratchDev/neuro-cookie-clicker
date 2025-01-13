@@ -254,6 +254,15 @@ NeuroIntegration.createOptionsMenu = function () {
     Game.customOptionsMenu.push(() => CCSE.AppendCollapsibleOptionsMenu(NeuroIntegration.name, getMenuString()));
 };
 
+NeuroIntegration.util.getBakeryName = () => {
+    return Game.bakeryNameL.textContent
+}
+
+NeuroIntegration.util.setBakeryName = (name) => {
+    // TODO: sanitize the name even more than the game already does
+    Game.bakeryNameSet(name);
+}
+
 if (NeuroIntegration.api === undefined) NeuroIntegration.api = {};
 NeuroIntegration.api.setUpWebSocket = function () {
     const Mod = NeuroIntegration;
@@ -595,6 +604,8 @@ NeuroIntegration.launch = function () {
     Game.Notify("Neuro-sama Integration loaded!", "Bwaaa!", [16, 5], 6, 1);
 
     const Mod = NeuroIntegration;
+
+    Mod.util.setBakeryName("Neuro-sama");
 
     CCSE.customSave.push(() => {
         console.info("[NeuroIntegration] Saving config...");
