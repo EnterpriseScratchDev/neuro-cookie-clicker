@@ -15,6 +15,7 @@ Pushed to the Steam Workshop on 2025-01-12.
     - This includes the currently held cookies, the current CPS, the CPS breakdown by building, and part of the contents
       of the store.
     - The game state is sent every 5 seconds. This is not configurable currently, but it will be in a future update.
+- Reconnect functionality to the WebSocket connection (currently hardcoded to 5 seconds).
 - Allow Neuro to buy buildings and upgrades using the `buy_building` and `buy_upgrade` actions.
 - Allow Neuro to click golden cookies using the `click_golden_cookie` action.
     - Neuro will treat reindeer as if they were golden cookies. A future update may distinguish between the two.
