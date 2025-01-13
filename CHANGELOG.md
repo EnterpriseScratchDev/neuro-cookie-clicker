@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Make it clear to Neuro when an error occurred when trying to buy a building or upgrade.
+  Surely an error would never actually occur. Surely.
+
 ## [1.0.0] - 2025-01-12
 
 Pushed to the Steam Workshop on 2025-01-12.

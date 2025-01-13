@@ -872,7 +872,7 @@ NeuroIntegration.launch = function () {
             return amountBought;
         } else {
             console.error(`[NeuroIntegration] Failed to buy [${object.name}] for an unknown reason`);
-            return "Failed to buy for an unknown reason";
+            return "Failed to buy the object for an unknown reason. Blame EnterpriseScratchDev for this.";
         }
     }
 
@@ -903,7 +903,7 @@ NeuroIntegration.launch = function () {
             return undefined;
         } else {
             console.error(`[NeuroIntegration] Failed to buy upgrade "${upgrade.name}" for an unknown reason`);
-            return "Failed to buy for an unknown reason";
+            return "Failed to buy the upgrade for an unknown reason. Blame EnterpriseScratchDev for this.";
         }
     }
 
