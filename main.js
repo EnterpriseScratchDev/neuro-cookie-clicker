@@ -414,13 +414,14 @@ NeuroIntegration.api.actionHandlers.buy_upgrade = (actionMessage) => {
             }
         });
     } else {
+        const newCookies = Game.cookies;
         NeuroIntegration.api.sendActionResult({
             command: "action/result",
             game: "Cookie Clicker",
             data: {
                 id: actionMessage.data.id,
                 success: true,
-                message: `You bought the upgrade!`
+                message: `You bought the upgrade! You now have ${Beautify(newCookies)} cookies.`
             }
         });
     }
@@ -476,13 +477,14 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
             }
         });
     } else {
+        const newCookies = Game.cookies;
         NeuroIntegration.api.sendActionResult({
             command: "action/result",
             game: "Cookie Clicker",
             data: {
                 id: actionMessage.data.id,
                 success: true,
-                message: `You bought ${buyResult} of [${object.name}]`
+                message: `You bought ${buyResult} of [${object.name}]. You now have ${Beautify(newCookies)} cookies.`
             }
         });
     }

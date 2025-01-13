@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Include the new cookie balance in the result message when buying a building or upgrade.
 - Make it clear to Neuro when an error occurred when trying to buy a building or upgrade.
   Surely an error would never actually occur. Surely.
 
