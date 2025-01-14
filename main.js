@@ -107,7 +107,7 @@ var CCSE;
  */
 
 /**
- * Cookie Clicker function that formats a number with commas.
+ * Cookie Clicker function that formats a number.
  * @typedef {function} Beautify
  * @param {number} num
  * @return {string}
@@ -121,7 +121,7 @@ var CCSE;
 if (NeuroIntegration === undefined) var NeuroIntegration = {};
 NeuroIntegration.id = "neuro api mod"; // the spaces are necessary
 NeuroIntegration.name = "Neuro-sama API Integration";
-NeuroIntegration.version = "1.00";
+NeuroIntegration.version = "1.1.0";
 NeuroIntegration.GameVersion = "2.052";
 /** @type {string | undefined} */
 NeuroIntegration.errorMessage = undefined;
@@ -156,13 +156,18 @@ NeuroIntegration.util.reload = () => {
 
     if (l("neuro-integration-ws-address")?.value) {
         NeuroIntegration.config.wsAddress = l("neuro-integration-ws-address").value;
-        CCSE.save();
+        CCSE.save(); // ensure the config is saved before reloading
     }
 
     Game.toSave = true;
     Game.toReload = true;
 };
 
+/**
+ * Load a script from a given path and return a promise that resolves when the script is loaded.
+ * @param path
+ * @returns {Promise<unknown>}
+ */
 NeuroIntegration.loadDependency = function (path) {
     console.debug(`Loading dependency from path "${path}"`);
     return new Promise((resolve, reject) => {
@@ -197,9 +202,55 @@ NeuroIntegration.loadDependencies = async function () {
     return Promise.all([zodPromise, neuroApiTypesPromise, neuroApiClientPromise]);
 };
 
+/**
+ * @typedef NeuroIntegrationConfigV1
+ * @prop {string} wsAddress the address of the Neuro API WebSocket server
+ */
+
 NeuroIntegration.defaultConfig = function () {
     return {
-        wsAddress: "ws://localhost:8000"
+        wsAddress: "ws://localhost:8000",
+
+        // Whether to enable the auto-clicker while Neuro is connected.
+        autoClicker: true,
+
+        // The number of milliseconds between each click when the auto-clicker is active.
+        autoClickerIntervalMs: 500,
+
+        // The interval at which to regularly send context to Neuro, in milliseconds.
+        sendContextIntervalMs: 5000,
+
+        context: {
+            // Whether to include the bakery name in the context.
+            bakeryName: false,
+
+            // Whether to include the news/comments bulletin in the context.
+            bulletin: true,
+
+            // Whether to include the number of cookies in the context.
+            cookies: true,
+            // Whether to include the total cookies per second in the context.
+            cookiesPerSecond: true,
+            // Whether to include the cookies per second by building in the context.
+            cookiesPerSecondByBuilding: true,
+
+            // Whether to include upgrades from the store in the context.
+            storeUpgrades: true,
+            // The maximum number of upgrades from the store to include in the context.
+            // If there are more upgrades than this, the cheapest upgrades will be prioritized.
+            storeMaxUpgrades: 5,
+
+            // Whether to include buildings from the store in the context.
+            storeBuildings: true,
+            // The maximum number of buildings from the store to include in the context.
+            // If there are more buildings than this, the cheapest buildings will be prioritized.
+            // Note that there are 20 total buildings in the vanilla game.
+            storeMaxBuildings: 5,
+
+            // Whether to include owned buildings in the context.
+            // This is disabled by default as this data it isn't very useful and can be quite large.
+            ownedBuildings: false
+        }
     };
 }
 
@@ -221,6 +272,10 @@ NeuroIntegration.updateConfig = function (key, value) {
     }
 }
 
+/**
+ * Register an options menu for the mod.
+ * @type {() => void}
+ */
 NeuroIntegration.createOptionsMenu = function () {
     function getMenuString() {
         let m = CCSE.MenuHelper;
@@ -284,6 +339,10 @@ NeuroIntegration.api.setUpWebSocket = function () {
     const client = Mod.api.client;
     client.onStatus((status) => {
         console.info(`WebSocket status: ${status}`);
+        if (Mod.autoClicker.intervalId !== null) {
+            clearInterval(Mod.autoClicker.intervalId);
+            Mod.autoClicker.intervalId = null;
+        }
         if (status === "open") {
             client.send({
                 command: "startup",
@@ -291,15 +350,12 @@ NeuroIntegration.api.setUpWebSocket = function () {
             });
             Mod.api.registerActions("buy_upgrade", "buy_building");
 
-            // Automatically click the cookie every 100ms
-            if (Mod.autoClicker.intervalId === null) {
-                Mod.autoClicker.intervalId = setInterval(() => Mod.util.clickCookie(), Mod.autoClicker.msPerClick);
+            if (Mod.config.autoClicker) {
+                // Automatically click the cookie
+                Mod.autoClicker.intervalId = setInterval(() => Mod.util.clickCookie(), Mod.config.autoClickerIntervalMs);
             }
         } else {
-            if (Mod.autoClicker.intervalId !== null) {
-                clearInterval(Mod.autoClicker.intervalId);
-                Mod.autoClicker.intervalId = null;
-            }
+            // Don't use the auto-clicker while the connection is closed
         }
     });
     client.onCommand("action", (message) => {
@@ -519,7 +575,7 @@ NeuroIntegration.api.actions = {
     },
     buy_building: {
         name: "buy_building",
-        description: "Buy a building. The building name must exactly match the name of a building in the store. If you have insufficient cookies to buy the requested amount, the game will buy as many as you can afford.",
+        description: "Buy a building. The building name must exactly match the name of a building in the store. Specify the amount to buy. The store tells you how many you can afford with your current cookies in the `canAfford` property.",
         schema: {
             type: "object",
             properties: {
@@ -537,7 +593,7 @@ NeuroIntegration.api.actions = {
 
 /**
  * Register actions with the Neuro-sama API.
- * @param {string[]} actionNames the names of the actions to register
+ * @param {string | string[]} actionNames the names of the actions to register
  * @see NeuroIntegration.api.actions
  */
 NeuroIntegration.api.registerActions = (...actionNames) => {
@@ -585,6 +641,7 @@ NeuroIntegration.api.unregisterActions = (...actionNames) => {
  * @param {boolean = false} silent whether to prompt Neuro to respond to the context
  */
 NeuroIntegration.api.sendContext = (message, silent = false) => {
+    console.debug("[NeuroIntegration] Sending context:", message);
     if (typeof message !== "string") {
         message = JSON.stringify(message);
     }
@@ -661,7 +718,7 @@ NeuroIntegration.launch = function () {
      * @prop {number | null} setIntervalId the ID of the last call to `setInterval`, or `null` if no interval is running
      */
     Mod.autoClicker = {
-        msPerClick: 200,
+        msPerClick: 500,
         maximumPendingClicks: 100,
         remainingClicks: 0,
         intervalId: null
@@ -757,69 +814,122 @@ NeuroIntegration.launch = function () {
         const filteredCookiesPerSecondByBuilding = {};
         for (const key in cookiesPerSecondByBuilding) {
             if (cookiesPerSecondByBuilding.hasOwnProperty(key) && cookiesPerSecondByBuilding[key] !== 0) {
-                cookiesPerSecondByBuilding[key] = cookiesPerSecondByBuilding[key];
+                filteredCookiesPerSecondByBuilding[key] = Math.floor(cookiesPerSecondByBuilding[key]);
             }
         }
         return filteredCookiesPerSecondByBuilding;
     }
 
     Mod.util.getContext = () => {
-        const context = {
-            cookies: Beautify(Game.cookies),
-            totalCookiesPerSecond: Beautify(Game.cookiesPs),
-            cookiesPerSecondByBuilding: Mod.util.getCookiesPerSecondByBuilding(),
-            store: getStoreContents(5)
-        };
-        const commentsText = l("commentsText1")?.innerText;
-        if (commentsText && commentsText.length > 0) {
-            context.bulletin = commentsText;
+        console.assert(Mod.config?.context, "the config should have been loaded by now");
+        const context = {};
+        const contextConfig = Mod.config.context;
+        if (contextConfig.bakeryName) {
+            context.bakeryName = Mod.util.getBakeryName();
+        }
+        if (contextConfig.bulletin) {
+            const commentsText = l("commentsText1")?.innerText;
+            if (commentsText && commentsText.length > 0) {
+                context.bulletin = commentsText;
+            }
+        }
+        if (contextConfig.cookies) {
+            context.cookies = Beautify(Game.cookies);
+        }
+        if (contextConfig.cookiesPerSecond) {
+            context.cookiesPerSecond = Beautify(Game.cookiesPs);
+        }
+        if (contextConfig.cookiesPerSecondByBuilding) {
+            context.cookiesPerSecondByBuilding = Mod.util.getCookiesPerSecondByBuilding();
+        }
+        if (contextConfig.storeUpgrades) {
+            context.storeUpgrades = Mod.util.getStoreUpgrades(contextConfig.storeUpgrades);
+        }
+        if (contextConfig.storeBuildings) {
+            context.storeBuildings = Mod.util.getStoreBuildings(contextConfig.storeMaxBuildings);
+        }
+        if (contextConfig.ownedBuildings) {
+            context.ownedBuildings = Mod.util.getOwnedBuildings();
         }
         return context;
     }
-    // // TODO: make this configurable
-    setInterval(() => {
-        // TODO: make this configurable
-        // if (Mod.autoClicker.remainingClicks < 75) {
-        //     Mod.api.registerActions("click_cookie");
-        // }
-        Mod.api.sendContext(Mod.util.getContext(), true);
-    }, 5000);
 
-    function getStoreContents(maxUpgrades = 5) {
-        let upgrades = [];
-        for (let i = 0; i < Math.min(Game.UpgradesInStore.length, maxUpgrades); i++) {
-            const upgrade = Game.UpgradesInStore[i];
-            upgrades.push({
-                name: upgrade.name,
-                desc: simplifyHtmlString(upgrade.desc),
-                price: Beautify(upgrade.getPrice()),
-                canBuy: upgrade.canBuy()
-            });
+    Mod.util.sendContextIntervalId = null;
+    function setContextSendInterval() {
+        if (Mod.util.sendContextIntervalId !== null) {
+            clearInterval(Mod.util.sendContextIntervalId);
         }
+        const intervalMs = Mod.config?.sendContextIntervalMs || 5000;
+        Mod.util.sendContextIntervalId = setInterval(() => {
+            Mod.api.sendContext(Mod.util.getContext(), true);
+        }, intervalMs);
+    }
+    Mod.util.setContextSendInterval = setContextSendInterval;
 
-        let objects = [];
-        for (let i = 0; i < Game.ObjectsById.length; i++) {
-            const object = Game.ObjectsById[i];
-            if (object.locked) continue;
-            // Skip objects that are too expensive
-            if (object.amount === 0 && object.getPrice() > 10 * Game.cookies) continue;
-            objects.push({
-                name: object.name,
-                desc: simplifyHtmlString(object.desc),
-                priceFor1: Beautify(object.getPrice()),
-                priceFor5: Beautify(object.getSumPrice(5)),
-                priceFor10: Beautify(object.getSumPrice(10)),
-                // priceFor25: Beautify(object.getSumPrice(25)),
+    function getOwnedBuildings() {
+        return Game.ObjectsById // buildings are called "objects" in the game's code
+            .filter(obj.amount > 0)
+            .map(obj => {
+                return {
+                    name: obj.name,
+                    desc: simplifyHtmlString(obj.desc),
+                }
             });
-        }
-
-        return {
-            upgrades: upgrades,
-            objects: objects
-        };
     }
 
-    Mod.util.getStoreContents = getStoreContents;
+    Mod.util.getOwnedBuildings = getOwnedBuildings;
+
+    function getStoreUpgrades(maxUpgrades = 5) {
+        return [...Game.UpgradesInStore]
+            .sort((a, b) => a.getPrice() - b.getPrice())
+            .slice(0, maxUpgrades)
+            .map(upgrade => {
+                return {
+                    name: upgrade.name,
+                        desc: simplifyHtmlString(upgrade.desc),
+                    price: Beautify(upgrade.getPrice()),
+                    canBuy: upgrade.canBuy()
+                }
+            });
+    }
+
+    Mod.util.getStoreUpgrades = getStoreUpgrades;
+
+    function getStoreBuildings(maxBuildings = 5) {
+        return [...Game.ObjectsById] // buildings are called "objects" in the game's code
+            .filter(obj => !obj.locked)
+            // Skip objects that are un-owned and very expensive
+            .filter(obj => obj.amount === 0 || obj.getPrice() <= 10 * Game.cookies)
+            .sort((a, b) => a.getPrice() - b.getPrice())
+            .slice(0, maxBuildings)
+            .map(obj => {
+                const building = {
+                    name: obj.name,
+                    desc: simplifyHtmlString(obj.desc),
+                    baseCps: obj.baseCps,
+                    price: Beautify(obj.getPrice())
+                };
+                let canAfford = 0;
+                for (let i = 1; i <= 10; i++) {
+                    if (obj.getSumPrice(i) <= Game.cookies) {
+                        canAfford = i;
+                    } else {
+                        break;
+                    }
+                }
+                // Tell Neuro how many she can afford
+                building.canAfford = canAfford;
+                // Suggest buying 5 or 10 of the building if the player can afford it
+                // if (obj.getSumPrice(10) <= Game.cookies) {
+                //     building.priceFor10 = Beautify(obj.getSumPrice(10));
+                // } else if (obj.getSumPrice(5) <= Game.cookies) {
+                //     building.priceFor5 = Beautify(obj.getSumPrice(5));
+                // }
+                return building;
+            });
+    }
+
+    Mod.util.getStoreBuildings = getStoreBuildings;
 
     function simplifyHtmlString(htmlString) {
         return htmlString
@@ -862,7 +972,7 @@ NeuroIntegration.launch = function () {
         }
         if (object.getPrice() > Game.cookies) {
             console.warn(`[NeuroIntegration] Insufficient cookies to buy any [${object.name}]`);
-            return `Insufficient cookies to buy any [${object.name}]. You need ${Beautify(object.getPrice() - Game.cookies)} more cookies to afford one.`;
+            return `Insufficient cookies to buy any [${object.name}]. If you just bought something, the canAfford numbers in the shop may be inaccurate.`;
         }
         const oldAmount = object.amount;
         const buyResult = object.buy(amount);
@@ -897,7 +1007,7 @@ NeuroIntegration.launch = function () {
         const price = upgrade.getPrice();
         if (cookies < price) {
             console.warn(`[NeuroIntegration] Insufficient cookies to buy upgrade "${upgradeName}"`);
-            return `Insufficient cookies to buy upgrade "${upgrade.name}". You need ${Beautify(price - cookies)} more cookies to afford it.`;
+            return `Insufficient cookies to buy upgrade "${upgrade.name}". If you just bought something, the canAfford numbers in the shop may be inaccurate.`;
         }
         const success = upgrade.buy();
         if (success) {
@@ -921,6 +1031,15 @@ NeuroIntegration.launch = function () {
     Mod.createOptionsMenu();
 
     Mod.api.setUpWebSocket();
+
+    Mod.util.setContextSendInterval();
+
+    // Show the version of this mod in the game
+    var versionNumber = l('versionNumber');
+    var versionDiv = document.createElement('p');
+    versionDiv.id = 'NeuroIntegrationVersion';
+    versionDiv.innerHTML = `NeuroIntegration v. ${Mod.version}`;
+    versionNumber.appendChild(versionDiv);
 
     console.info("[NeuroIntegration] Finished launching Neuro-sama Integration");
 };
