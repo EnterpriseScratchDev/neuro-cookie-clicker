@@ -5,11 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+
+## [1.1.0] - 2025-01-13
+
+Pushed to the Steam Workshop on 2025-01-13.
+
 ### Added
 
+- Created a framework for configuring what's included in the context sent to Neuro.
+  Minor changes to existing behavior were made during the process of creating this.
+- Add a backoff mechanism to the WebSocket connection.
 - Include the new cookie balance in the result message when buying a building or upgrade.
+- Tell Neuro how many of each building she can afford when sending the store context.
+  When testing with Jippity, including this information encouraged him to buy more buildings.
 - Make it clear to Neuro when an error occurred when trying to buy a building or upgrade.
   Surely an error would never actually occur. Surely.
+
+### Changed
+
+- Improved the readability of the context sent to Neuro.
+- Changed the auto-clicker interval to 500ms
+- Changed the maximum number of buildings in the store context to 5
+
+### Fixed
+
+- Fixed a bug where the cookies-per-second-by-building data wasn't being included in the context sent to Neuro.
 
 ## [1.0.0] - 2025-01-12
 
@@ -32,6 +52,6 @@ Pushed to the Steam Workshop on 2025-01-12.
     - The WebSocket will automatically connect to the new address on subsequent launches of the game.
     - The options menu includes a button for quickly reloading the game to apply the changed settings.
 
-[unreleased]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0.0...HEAD
-
+[unreleased]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/releases/tag/v1.0.0
