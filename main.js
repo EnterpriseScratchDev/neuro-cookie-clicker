@@ -121,7 +121,7 @@ var CCSE;
 if (NeuroIntegration === undefined) var NeuroIntegration = {};
 NeuroIntegration.id = "neuro api mod"; // the spaces are necessary
 NeuroIntegration.name = "Neuro-sama API Integration";
-NeuroIntegration.version = "1.1.0";
+NeuroIntegration.version = "1.2";
 NeuroIntegration.GameVersion = "2.052";
 /** @type {string | undefined} */
 NeuroIntegration.errorMessage = undefined;
