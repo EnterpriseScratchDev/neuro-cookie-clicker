@@ -1,0 +1,5 @@
+# IDE files
+/.idea/
+
+# Libraries that will be present at runtime but don't need to be checked in
+/lib-ext/
