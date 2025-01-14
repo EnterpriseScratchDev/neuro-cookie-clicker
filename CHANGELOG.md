@@ -14,6 +14,8 @@ This hasn't been pushed to the Steam Workshop yet.
 - Fixed a bug with the tracking of shimmers (golden cookies and reindeer).
   Prior to this fix, Neuro likely would have thought there was always a golden cookie on the screen once one had first
   appeared.
+- Fixed a bug where an action result would never be sent to Neuro if a golden cookie is clicked and there's another on
+  the screen.
 
 ## [1.1] - 2025-01-13
 
@@ -62,6 +64,9 @@ Pushed to the Steam Workshop on 2025-01-12.
     - The options menu includes a button for quickly reloading the game to apply the changed settings.
 
 [unreleased]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.2...HEAD
+
 [1.2]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.1...v1.2
+
 [1.1]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0...v1.1
+
 [1.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/releases/tag/v1.0
