@@ -400,7 +400,7 @@ NeuroIntegration.api.actionHandlers.click_cookie = (actionMessage) => {
 };
 
 NeuroIntegration.api.actionHandlers.click_golden_cookie = (actionMessage) => {
-    if (Game.shimmersN === 0) {
+    if (Game.shimmers.length === 0) {
         NeuroIntegration.api.unregisterActions("click_golden_cookie");
         NeuroIntegration.api.sendActionResult({
             command: "action/result",
@@ -419,8 +419,8 @@ NeuroIntegration.api.actionHandlers.click_golden_cookie = (actionMessage) => {
             console.error("[NeuroIntegration] Failed to click a golden cookie", e);
         }
         let message;
-        if (Game.shimmersN > 0) {
-            message = `You click the golden cookie! There are ${Game.shimmersN} more golden cookies to click!`;
+        if (Game.shimmers.length > 0) {
+            message = `You click the golden cookie! There are ${Game.shimmers.length``} more golden cookies to click!`;
         } else {
             message = `You click the golden cookie! There no more golden cookies to click!`;
             NeuroIntegration.api.unregisterActions("click_golden_cookie");
