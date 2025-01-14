@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [1.1.1] - 2025-01-14
+## [1.2] - 2025-01-14
 
 This hasn't been pushed to the Steam Workshop yet.
 
@@ -15,7 +15,7 @@ This hasn't been pushed to the Steam Workshop yet.
   Prior to this fix, Neuro likely would have thought there was always a golden cookie on the screen once one had first
   appeared.
 
-## [1.1.0] - 2025-01-13
+## [1.1] - 2025-01-13
 
 Pushed to the Steam Workshop on 2025-01-13.
 
@@ -40,7 +40,7 @@ Pushed to the Steam Workshop on 2025-01-13.
 
 - Fixed a bug where the cookies-per-second-by-building data wasn't being included in the context sent to Neuro.
 
-## [1.0.0] - 2025-01-12
+## [1.0] - 2025-01-12
 
 Pushed to the Steam Workshop on 2025-01-12.
 
@@ -61,7 +61,7 @@ Pushed to the Steam Workshop on 2025-01-12.
     - The WebSocket will automatically connect to the new address on subsequent launches of the game.
     - The options menu includes a button for quickly reloading the game to apply the changed settings.
 
-[unreleased]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0.0...v1.1.1
-[1.1.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/releases/tag/v1.0.0
+[unreleased]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.2...HEAD
+[1.2]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.1...v1.2
+[1.1]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/compare/v1.0...v1.1
+[1.0]: https://github.com/EnterpriseScratchDev/neuro-cookie-clicker/releases/tag/v1.0
