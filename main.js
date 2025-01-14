@@ -362,7 +362,26 @@ NeuroIntegration.api.setUpWebSocket = function () {
         console.debug("[NeuroIntegration] Received action message:", message);
         const handler = Mod.api.actionHandlers[message.data.name];
         if (handler) {
-            handler(message);
+            let result;
+            try {
+                result = handler(message);
+                if (result) {
+                    Mod.api.sendActionResult(result);
+                }
+            } catch (e) {
+                console.error(`[NeuroIntegration] An error occurred while processing the action "${message.data.name}"`, e);
+            }
+            if (!result) {
+                Mod.api.sendActionResult({
+                    command: "action/result",
+                    game: "Cookie Clicker",
+                    data: {
+                        id: message.data.id,
+                        success: false,
+                        message: "An error occurred while processing the action. Blame EnterpriseScratchDev for this."
+                    }
+                });
+            }
         } else {
             console.error(`[NeuroIntegration] No handler for action "${message.data.name}"`);
         }
@@ -447,20 +466,19 @@ NeuroIntegration.api.actionHandlers.buy_upgrade = (actionMessage) => {
         console.error(`[NeuroIntegration] Failed to parse data for action "buy_upgrade"`, e);
     }
     if (!upgradeName) {
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
                 id: actionMessage.data.id,
                 success: false,
-                message: "No upgrade name provided"
+                message: "No upgrade name provided, or invalid JSON was provided"
             }
-        });
-        return;
+        };
     }
     const buyError = NeuroIntegration.util.buyUpgrade(upgradeName);
     if (buyError) {
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -468,10 +486,10 @@ NeuroIntegration.api.actionHandlers.buy_upgrade = (actionMessage) => {
                 success: false,
                 message: buyError
             }
-        });
+        };
     } else {
         const newCookies = Game.cookies;
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -479,7 +497,7 @@ NeuroIntegration.api.actionHandlers.buy_upgrade = (actionMessage) => {
                 success: true,
                 message: `You bought the upgrade! You now have ${Beautify(newCookies)} cookies.`
             }
-        });
+        };
     }
 }
 
@@ -497,7 +515,7 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
         console.error(`[NeuroIntegration] Failed to parse data for action "buy_building"`, e);
     }
     if (!buildingName) {
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -505,12 +523,11 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
                 success: false,
                 message: "No building name provided"
             }
-        });
-        return;
+        };
     }
     const object = NeuroIntegration.util.getObjectByName(buildingName);
     if (typeof object === "undefined") {
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -518,12 +535,11 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
                 success: false,
                 message: `No building found with name "${buildingName}"`
             }
-        });
-        return;
+        };
     }
     const buyResult = NeuroIntegration.util.buyObject(object, amount);
     if (typeof buyResult === "string") {
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -531,10 +547,10 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
                 success: false,
                 message: "Failed to buy the building: " + buyResult
             }
-        });
+        };
     } else {
         const newCookies = Game.cookies;
-        NeuroIntegration.api.sendActionResult({
+        return {
             command: "action/result",
             game: "Cookie Clicker",
             data: {
@@ -542,7 +558,7 @@ NeuroIntegration.api.actionHandlers.buy_building = (actionMessage) => {
                 success: true,
                 message: `You bought ${buyResult} of [${object.name}]. You now have ${Beautify(newCookies)} cookies.`
             }
-        });
+        };
     }
 }
 
