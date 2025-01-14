@@ -1,0 +1,5 @@
+# External libraries that are present at runtime but not in the source tree
+/lib-ext/
+
+# IDE files
+/.idea/
