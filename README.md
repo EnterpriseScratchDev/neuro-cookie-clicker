@@ -17,7 +17,7 @@ It's used to validate all incoming and outgoing WebSocket messages to ensure err
 
 ## Manual Installation
 
-If you want to avoid using the Steam Workshop, you can manually install this mod.
+If you want to avoid using the Steam Workshop, you can install this mod manually. This has the advantage of avoiding automatic updates - which could be malicious.
 
 1. Download the contents of this repository. If you downloaded a zip file, extract it to a folder. The entire folder will be loaded as a mod.
 2. Open the directory where Cookie Clicker is installed. The folder path should end with something like `steamapps/common/Cookie Clicker`.
