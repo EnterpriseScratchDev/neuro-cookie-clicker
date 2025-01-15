@@ -29,7 +29,7 @@ If you want to avoid using the Steam Workshop, you can install this mod manually
 8. Enable both of the mods. Move "CCSE" above "Neuro-sama API Integration".
 9. Click "Restart with new changes". You should now see version numbers for both mods in the lower left corner of the screen.
 
-An alternative way to install the mods locally is to install them from the Steam Workstop, then drag them from the `/mods/workshop` directory to the `/mods/local` directory, then unsubscribe from them on the Steam Workshop.
+An alternative way to install the mods locally is to install them from the Steam Workshop, then drag them from the `/mods/workshop` directory to the `/mods/local` directory, then unsubscribe from them on the Steam Workshop.
 
 ## Configuring the Neuro API Connection
 
