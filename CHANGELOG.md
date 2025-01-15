@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.2] - 2025-01-14
 
-This hasn't been pushed to the Steam Workshop yet.
+Pushed to the Steam Workshop on 2025-01-14.
 
 ### Fixed
 
