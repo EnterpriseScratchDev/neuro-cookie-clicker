@@ -30,3 +30,11 @@ If you want to avoid using the Steam Workshop, you can install this mod manually
 9. Click "Restart with new changes". You should now see version numbers for both mods in the lower left corner of the screen.
 
 An alternative way to install the mods locally is to install them from the Steam Workstop, then drag them from the `/mods/workshop` directory to the `/mods/local` directory, then unsubscribe from them on the Steam Workshop.
+
+## Configurting the Neuro API Connection
+
+The address of the Neuro API to connect to can be configured in the in-game options menu.
+Simply replace `ws://localhost:8000` with the appropriate address.
+The text box sometimes loses focus while you're typing, so you might need to click on it again.
+This is really only fixable by require creating a new options menu and I just can't be bothered.
+Once you're entered the address you want, click the button labeled "Reload the Game".
