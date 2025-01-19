@@ -432,7 +432,8 @@ NeuroIntegration.api.actionHandlers.click_golden_cookie = (actionMessage) => {
         });
     } else {
         try {
-            Game.shimmers[0].l.click(); // click the first golden cookie
+            // Click the oldest golden cookie
+            Game.shimmers.toSorted((a, b) => a.life - b.life)[0].pop();
         } catch (e) {
             // This is unlikely to happen, so we won't handle it any further
             console.error("[NeuroIntegration] Failed to click a golden cookie", e);
