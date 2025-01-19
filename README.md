@@ -3,7 +3,7 @@
 This mod can be downloaded from its [Steam Workshop page](https://steamcommunity.com/sharedfiles/filedetails/?id=3406562828).
 The only dependency you need to download is [CCSE](https://steamcommunity.com/sharedfiles/filedetails/?id=2685465009), which is also downloaded from the Steam Workshop.
 
-The [Zod](https://zod.dev/) schema validation library is included in this mod.
+The [Zod](https://zod.dev/) schema validation library is included in this mod (see `lib/zod.umd.js`).
 It's used to validate all incoming and outgoing WebSocket messages to ensure errors are detected as early as possible.
 
 ## Installation via the Steam Workshop
@@ -17,7 +17,8 @@ It's used to validate all incoming and outgoing WebSocket messages to ensure err
 
 ## Manual Installation
 
-If you want to avoid using the Steam Workshop, you can install this mod manually. This has the advantage of avoiding automatic updates - which could be malicious.
+If you want to avoid using the Steam Workshop, you can install this mod manually.
+This has the advantage of avoiding automatic updates, [which can be malicious](https://www.pcgamer.com/popular-slay-the-spire-mod-hacked-to-deliver-malware-on-christmas-day/).
 
 1. Download the contents of this repository. If you downloaded a zip file, extract it to a folder. The entire folder will be loaded as a mod.
 2. Open the directory where Cookie Clicker is installed. The folder path should end with something like `steamapps/common/Cookie Clicker`.
@@ -36,5 +37,5 @@ An alternative way to install the mods locally is to install them from the Steam
 The address of the Neuro API to connect to can be configured in the in-game options menu.
 Simply replace `ws://localhost:8000` with the appropriate address.
 The text box sometimes loses focus while you're typing, so you might need to click on it again.
-This is really only fixable by require creating a new options menu and I just can't be bothered.
+This is really only fixable by creating a new options menu and I just can't be bothered.
 Once you're entered the address you want, click the button labeled "Reload the Game".
